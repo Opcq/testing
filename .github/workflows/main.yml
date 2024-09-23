@@ -17,17 +17,34 @@ jobs:
 
     - name: Enable Remote Desktop
       run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+        try {
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+        } catch {
+          Write-Host "Error enabling Remote Desktop: $_"
+          exit 1
+        }
 
     - name: Set Local User Password
-      run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "${{ secrets.RUNNER_ADMIN_PASSWORD }}" -Force)
+      run: |
+        try {
+          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "${{ secrets.RUNNER_ADMIN_PASSWORD }}" -Force)
+        } catch {
+          Write-Host "Error setting local user password: $_"
+          exit 1
+        }
       env:
         RUNNER_ADMIN_PASSWORD: ${{ secrets.RUNNER_ADMIN_PASSWORD }}
 
     - name: Start ngrok in the background
-      run: Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389"
+      run: |
+        try {
+          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389"
+        } catch {
+          Write-Host "Error starting ngrok: $_"
+          exit 1
+        }
 
     - name: Wait for ngrok to start
       run: Start-Sleep -Seconds 5
@@ -52,7 +69,7 @@ jobs:
         }
         $ngrokUrl = ($ngrokApi | ConvertFrom-Json).tunnels[0].public_url
         Write-Host "Ngrok URL: $ngrokUrl"
-        echo "::set-output name=ngrok_url::$ngrokUrl"
+        echo "NGROK_URL=$ngrokUrl" >> $GITHUB_ENV
 
     - name: Wait before cleanup
       run: Start-Sleep -Seconds 54000
@@ -60,10 +77,17 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        $ngrokProcess = Get-Process -Name "ngrok" -ErrorAction SilentlyContinue
-        if ($null -ne $ngrokProcess) {
-          Write-Host "Terminating ngrok process..."
-          $ngrokProcess | Stop-Process -Force
-        } else {
-          Write-Host "Ngrok process not found."
+        try {
+          $ngrokProcess = Get-Process -Name "ngrok" -ErrorAction SilentlyContinue
+          if ($null -ne $ngrokProcess) {
+            Write-Host "Terminating ngrok process..."
+            $ngrokProcess | Stop-Process -Force
+          } else {
+            Write-Host "Ngrok process not found."
+          }
+        } catch {
+          Write-Host "Error during cleanup: $_"
         }
+
+    - name: Use ngrok URL
+      run: echo "The ngrok URL is ${{ env.NGROK_URL }}"
