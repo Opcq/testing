@@ -1,4 +1,4 @@
-name: Setup Google Remote Desktop
+name: Setup AnyDesk
 
 on:
   push:
@@ -6,25 +6,22 @@ on:
       - main
 
 jobs:
-  setup-remote-desktop:
+  setup-anydesk:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-
-    - name: Download Google Remote Desktop Host
+    - name: Download AnyDesk
       run: |
-        Invoke-WebRequest -Uri "https://dl.google.com/edgedl/chrome-remote-desktop/chromeremotedesktophost.msi" -OutFile "chromeremotedesktophost.msi"
+        Invoke-WebRequest -Uri "https://download.anydesk.com/AnyDesk.exe" -OutFile "AnyDesk.exe"
 
-    - name: Install Google Remote Desktop Host
+    - name: Install AnyDesk
       run: |
-        Start-Process msiexec.exe -ArgumentList '/i chromeremotedesktophost.msi /quiet /norestart' -NoNewWindow -Wait
+        Start-Process -FilePath "AnyDesk.exe" -ArgumentList "/S" -NoNewWindow -Wait
 
-    - name: Start Google Remote Desktop Host
+    - name: Set Unattended Access Password
       run: |
-        & "${Env:PROGRAMFILES(X86)}\Google\Chrome Remote Desktop\CurrentVersion\remoting_start_host.exe" --code="123321" --redirect-url="https://remotedesktop.google.com/_/oauthredirect" --name=$Env:COMPUTERNAME --redirect-url="https://remotedesktop.google.com/_/oauthredirect" --name=$Env:COMPUTERNAME
+        & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password "123321"
 
     - name: Cleanup
       run: |
-        Remove-Item "chromeremotedesktophost.msi"
+        Remove-Item "AnyDesk.exe" -Force
