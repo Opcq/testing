@@ -22,4 +22,4 @@ jobs:
           # Your PowerShell commands go here
           Write-Host "Hello from PowerShell on GitHub Actions!"
           # Example: List files in the current directory
-          Get-ChildItem
+          ipconfig
