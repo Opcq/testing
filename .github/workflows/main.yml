@@ -1,27 +1,94 @@
-name: PowerShell Script Execution
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-
+name: CI
+on: [push, workflow_dispatch]
 jobs:
-  run-powershell:
-    runs-on: windows-latest  # This will use the latest Windows Server runner
-
+  build: 
+    runs-on: windows-2022
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Download ngrok
+      run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
 
-      - name: Run PowerShell Script
-        shell: pwsh  # Use PowerShell Core
-        run: |
-          # Your PowerShell commands go here
-          Write-Host "Hello from PowerShell on GitHub Actions!"
-          # Example: List files in the current directory
-          cmd
-          ipconfig
-          net user
+    - name: Extract ngrok
+      run: Expand-Archive ngrok.zip -DestinationPath ngrok
+
+    - name: Authenticate ngrok
+      run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+
+    - name: Enable Remote Desktop
+      run: |
+        try {
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0
+        } catch {
+          Write-Host "Error enabling Remote Desktop: $_"
+          exit 1
+        }
+
+    - name: Set Local User Password
+      run: |
+        try {
+          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "${{ secrets.RUNNER_ADMIN_PASSWORD }}" -Force)
+        } catch {
+          Write-Host "Error setting local user password: $_"
+          exit 1
+        }
+      env:
+        RUNNER_ADMIN_PASSWORD: ${{ secrets.RUNNER_ADMIN_PASSWORD }}
+
+    - name: Start ngrok in the background
+      run: |
+        try {
+          # Specify the US region for ngrok
+          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389 --region us"
+        } catch {
+          Write-Host "Error starting ngrok: $_"
+          exit 1
+        }
+
+    - name: Wait for ngrok to start
+      run: Start-Sleep -Seconds 5
+
+    - name: Get ngrok tunnel information
+      id: ngrok_info
+      run: |
+        $maxAttempts = 20
+        $attempts = 0
+        $ngrokApi = $null
+        while (($null -eq $ngrokApi) -and ($attempts -lt $maxAttempts)) {
+          $attempts++
+          try {
+            $ngrokApi = Invoke-WebRequest "http://localhost:4040/api/tunnels" -UseBasicP -ErrorAction Stop
+          } catch {
+            Write-Host "Waiting for ngrok API... (attempt $attempts of $maxAttempts)"
+            Start-Sleep -Seconds 5
+          }
+        }
+        if ($null -eq $ngrokApi) {
+          throw "Failed to connect to ngrok API after $maxAttempts attempts."
+        }
+        $ngrokUrl = ($ngrokApi | ConvertFrom-Json).tunnels[0].public_url
+        Write-Host "Ngrok URL: $ngrokUrl"
+        echo "NGROK_URL=$ngrokUrl" >> $GITHUB_ENV
+
+    - name: Wait before cleanup
+      run: Start-Sleep -Seconds 54000
+
+    - name: Cleanup
+      if: always()
+      run: |
+        try {
+          $ngrokProcess = Get-Process -Name "ngrok" -ErrorAction SilentlyContinue
+          if ($null -ne $ngrokProcess) {
+            Write-Host "Terminating ngrok process..."
+            $ngrokProcess | Stop-Process -Force
+          } else {
+            Write-Host "Ngrok process not found."
+          }
+        } catch {
+          Write-Host "Error during cleanup: $_"
+        }
+
+    - name: Use ngrok URL
+      run: echo "The ngrok URL is ${{ env.NGROK_URL }}"
