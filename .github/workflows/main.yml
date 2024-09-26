@@ -99,6 +99,3 @@ jobs:
         } catch {
           Write-Host "Error during cleanup: $_"
         }
-
-    - name: Use ngrok URL
-      run: echo "The ngrok URL is ${{ env.NGROK_URL }}"
