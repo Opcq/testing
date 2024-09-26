@@ -25,7 +25,6 @@ jobs:
           Write-Host "Error enabling Remote Desktop: $_"
           exit 1
         }
-
     - name: Set Local User Password
       run: |
         try {
@@ -40,14 +39,14 @@ jobs:
     - name: Start ngrok in the background
       run: |
         try {
-          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389 --region us" -PassThru | Out-Null
+          # Specify the US region for ngrok
+          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389 --region us"
         } catch {
           Write-Host "Error starting ngrok: $_"
           exit 1
         }
-
     - name: Wait for ngrok to start
-      run: Start-Sleep -Seconds 5
+      run: Start-Sleep -Seconds 10
 
     - name: Get ngrok tunnel information
       id: ngrok_info
@@ -61,7 +60,7 @@ jobs:
             $ngrokApi = Invoke-WebRequest "http://localhost:4040/api/tunnels" -UseBasicP -ErrorAction Stop
           } catch {
             Write-Host "Waiting for ngrok API... (attempt $attempts of $maxAttempts)"
-            Start-Sleep -Seconds 5
+            Start-Sleep -Seconds 10
           }
         }
         if ($null -eq $ngrokApi) {
@@ -70,12 +69,8 @@ jobs:
         $ngrokUrl = ($ngrokApi | ConvertFrom-Json).tunnels[0].public_url
         Write-Host "Ngrok URL: $ngrokUrl"
         echo "NGROK_URL=$ngrokUrl" >> $GITHUB_ENV
-
-    - name: Display First ngrok URL
-      run: echo "The first ngrok URL is ${{ env.NGROK_URL }}"
-
     - name: Wait before cleanup
-      run: Start-Sleep -Seconds 10  # Shorter wait time for demonstration
+      run: Start-Sleep -Seconds 3600
 
     - name: Cleanup
       if: always()
@@ -91,40 +86,5 @@ jobs:
         } catch {
           Write-Host "Error during cleanup: $_"
         }
-
-    - name: Start ngrok again
-      run: |
-        try {
-          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389 --region us" -PassThru | Out-Null
-        } catch {
-          Write-Host "Error starting ngrok: $_"
-          exit 1
-        }
-
-    - name: Wait for ngrok to start again
-      run: Start-Sleep -Seconds 5
-
-    - name: Get ngrok tunnel information again
-      id: ngrok_info_second
-      run: |
-        $maxAttempts = 20
-        $attempts = 0
-        $ngrokApi = $null
-        while (($null -eq $ngrokApi) -and ($attempts -lt $maxAttempts)) {
-          $attempts++
-          try {
-            $ngrokApi = Invoke-WebRequest "http://localhost:4040/api/tunnels" -UseBasicP -ErrorAction Stop
-          } catch {
-            Write-Host "Waiting for ngrok API... (attempt $attempts of $maxAttempts)"
-            Start-Sleep -Seconds 5
-          }
-        }
-        if ($null -eq $ngrokApi) {
-          throw "Failed to connect to ngrok API after $maxAttempts attempts."
-        }
-        $ngrokUrl = ($ngrokApi | ConvertFrom-Json).tunnels[0].public_url
-        Write-Host "Ngrok URL (second time): $ngrokUrl"
-        echo "NGROK_URL_SECOND=$ngrokUrl" >> $GITHUB_ENV
-
-    - name: Display Second ngrok URL
-      run: echo "The second ngrok URL is ${{ env.NGROK_URL_SECOND }}"
+    - name: Use ngrok URL
+      run: echo "The ngrok URL is ${{ env.NGROK_URL }}"
