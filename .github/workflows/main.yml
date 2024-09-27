@@ -72,7 +72,7 @@ jobs:
         echo "NGROK_URL=$ngrokUrl" >> $GITHUB_ENV
 
     - name: Wait before cleanup
-      run: Start-Sleep -Seconds 54000
+      run: Start-Sleep -Seconds 3600
 
     - name: Log Job Status
       run: |
