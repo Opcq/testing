@@ -40,7 +40,7 @@ jobs:
     - name: Start ngrok in the background
       run: |
         try {
-          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp 3389 --region us-cal-1"
+          Start-Process -FilePath ".\ngrok\ngrok.exe" -ArgumentList "tcp --region ap-sg --subdomain 1 3389"
         } catch {
           Write-Host "Error starting ngrok: $_"
           exit 1
